@@ -1,0 +1,242 @@
+FUNCTION  Univerzalni_Import_Temeljnica (
+            p_datum     IN      CLOB,
+            p_pod       IN      CLOB,
+            p_god       IN      CLOB,
+            p_org       IN      CLOB,
+            p_dok       IN      CLOB,
+            p_br        IN      CLOB,
+            p_opis      IN      CLOB,
+            p_konta     IN      CLOB,
+            p_ana       IN      CLOB,
+            p_mjtk      IN      CLOB,
+            p_iznosd    IN      CLOB,
+            p_iznosp    IN      CLOB,
+            p_val       IN      CLOB,
+            p_iznval    IN      CLOB,
+            p_datdok    IN      CLOB,
+            p_datdosp   IN      CLOB,
+            p_tko       IN      VARCHAR2,
+            p_info      OUT     VARCHAR2) RETURN NUMBER IS
+
+  l_arrpod                      INTEGER_ARRAY;
+  l_arrgod                      INTEGER_ARRAY;
+  l_arrorg                      INTEGER_ARRAY;
+  l_arrdok                      INTEGER_ARRAY;
+  l_arrbr                          INTEGER_ARRAY;
+  l_arrval                        INTEGER_ARRAY;
+  l_arrmjtk                        INTEGER_ARRAY;
+  l_arranak                        INTEGER_ARRAY;
+  l_arrkonta                    STRING_ARRAY;
+  l_arropis                        STRING_ARRAY;
+  l_arriznosd                    DOUBLE_ARRAY;
+  l_arriznosp                    DOUBLE_ARRAY;
+  l_arriznval                    DOUBLE_ARRAY;
+  l_arrdatdok                    STRING_ARRAY;
+  l_arrdatdosp                    STRING_ARRAY;
+
+  l_arrdatk                      STRING_ARRAY;  -- 05.11.2015
+  
+  l_arrbrtem    STRING_ARRAY := STRING_ARRAY();
+
+  li_god NUMBER;
+  li_org NUMBER;
+  li_dok NUMBER;  
+  li_pod NUMBER;
+  li_broj NUMBER;
+  li_broj_tmp NUMBER;
+  li_brojac_tem NUMBER;
+  li_stavka_greska NUMBER;
+ -- ls_konto_greska VARCHAR2(6);
+  ls_konto_greska VARCHAR2(12); --18.12.2018
+  ls_opis VARCHAR2(30);
+  
+  lf_iznosd NUMBER(15,2);
+  lf_iznosp NUMBER(15,2);
+  
+  v_tem CLOB;
+  
+  r_konto                            ITIFIN.KONTO_ID%ROWTYPE;
+
+  CURSOR c_lock IS
+      SELECT *
+    FROM itifin.fgtem F
+    WHERE pod=li_pod AND god=li_god AND org=li_org AND dok=li_dok
+    AND br = (SELECT MAX(br) FROM itifin.fgtem WHERE pod=F.pod AND god=F.god AND org=F.org AND dok=F.dok);
+  r_lock c_lock%ROWTYPE;
+
+     E_KONTO                            EXCEPTION;
+  E_IMPORTIRANO       EXCEPTION;
+
+
+BEGIN
+
+-- Pravljenje arraya od ulaznih parametara
+
+  l_arrpod           := FINPKG.PARSE_STRING_TO_INTTABLE(p_pod);
+  l_arrgod          := FINPKG.PARSE_STRING_TO_INTTABLE(p_god);
+  l_arrorg          := FINPKG.PARSE_STRING_TO_INTTABLE(p_org);
+  l_arrdok          := FINPKG.PARSE_STRING_TO_INTTABLE(p_dok);
+  l_arrbr           := FINPKG.PARSE_STRING_TO_INTTABLE(p_br);
+  l_arrval           := FINPKG.PARSE_STRING_TO_INTTABLE(p_val);
+  l_arrmjtk          := FINPKG.PARSE_STRING_TO_INTTABLE(p_mjtk);
+  l_arranak          := FINPKG.PARSE_STRING_TO_INTTABLE(p_ana);
+
+
+  l_arrkonta         := FINPKG.PARSE_STRING_TO_STRTABLE(p_konta);
+  l_arropis         := FINPKG.PARSE_STRING_TO_STRTABLE(p_opis);
+  l_arrdatdok        := FINPKG.PARSE_STRING_TO_STRTABLE(p_datdok);
+  l_arrdatdosp        := FINPKG.PARSE_STRING_TO_STRTABLE(p_datdosp);
+
+  l_arrdatk           := FINPKG.PARSE_STRING_TO_STRTABLE(p_datum);
+
+
+  l_arriznosd      := FINPKG.PARSE_STRING_TO_DBLTABLE(p_iznosd);
+  l_arriznosp      := FINPKG.PARSE_STRING_TO_DBLTABLE(p_iznosp);
+  l_arriznval      := FINPKG.PARSE_STRING_TO_DBLTABLE(p_iznval);
+
+
+  li_brojac_tem:=0;
+  li_broj_tmp:=0;
+  
+  FOR i IN l_arrkonta.FIRST..l_arrkonta.LAST LOOP
+  
+    li_pod:=l_arrpod(i);
+    li_god:=l_arrgod(i);
+    li_org:=l_arrorg(i);
+    li_dok:=l_arrdok(i);
+  
+  -- Provjeravamo da li je godina u kojoj zelimo knjiziti u fin. već zaključena?
+    IF FINZATVARANJE_PERIOD.GODINA_PROVJERA(li_pod, li_god) = 'D' THEN  
+      RAISE FINZATVARANJE_PERIOD.E_ZATVORENA_GODINA;
+    END IF;
+
+    BEGIN
+      SELECT *
+      INTO r_konto
+      --FROM itifin.konto_id K WHERE p_datum BETWEEN K.konto_plan_od AND K.konto_plan_do and konto=TRIM(TO_CHAR(l_arrkonta(i),'000000')); 05.11.2015
+      FROM itifin.konto_id K WHERE 
+      TO_DATE(l_arrdatk(i),'dd.mm.yyyy') BETWEEN K.konto_plan_od AND K.konto_plan_do and konto=TRIM(TO_CHAR(l_arrkonta(i),'000000'));
+    EXCEPTION
+
+        WHEN NO_DATA_FOUND THEN
+          li_stavka_greska := i;
+        ls_konto_greska  := l_arrkonta(i);
+          --RAISE E_KONTO;
+
+      WHEN TOO_MANY_ROWS THEN
+          li_stavka_greska := i;
+        ls_konto_greska  := l_arrkonta(i);
+          RAISE E_KONTO;
+
+    END;
+
+    IF ((l_arrbr(i)<>li_broj_tmp) OR (i=1)) THEN
+    
+     IF i=1 THEN
+      SELECT COUNT(*) 
+      INTO li_broj
+      FROM itifin.fgtem
+      --WHERE pod=li_pod AND god=li_god AND org=li_org AND dok=li_dok AND datk=p_datum AND op=SUBSTR(l_arropis(i),1,30);
+      WHERE pod=li_pod AND god=li_god AND org=li_org AND dok=li_dok AND datk=TO_DATE(l_arrdatk(i), 'dd.mm.yyyy') AND op=SUBSTR(l_arropis(i),1,30);  --05.11.2015
+            
+      IF li_broj<> 0 THEN
+       v_tem := v_tem || li_pod || '/'|| li_god || '/'|| li_org || '/' || li_dok || '/' || l_arrdatk(i) || '/' || SUBSTR(l_arropis(i),1,30);
+       RAISE E_IMPORTIRANO;
+      END IF;
+      
+     END IF;
+     
+     SELECT NVL(MAX(br) + 1, 1)
+     INTO li_broj
+     FROM itifin.fs
+     WHERE pod=li_pod AND god=li_god AND org=li_org AND dok=li_dok;
+     
+     l_arrbrtem.EXTEND;
+     li_brojac_tem:=li_brojac_tem+1;
+     l_arrbrtem(li_brojac_tem):=TRIM(TO_CHAR(li_pod,'00'))||TRIM(TO_CHAR(li_god,'0000'))||TRIM(TO_CHAR(li_org,'0000'))||TRIM(TO_CHAR(li_dok,'000'))||TRIM(TO_CHAR(li_broj,'00000'))||TRIM(SUBSTR(l_arropis(i),1,30));
+     --ls_opis:=l_arrbrtem(li_brojac_tem);
+    END IF; 
+    
+           -- Insert stavke
+    INSERT INTO itifin.fs (
+      pod, god, org, dok, br, st,
+      datk, knt, ana, mjt, datdok, datdos, op,
+      val, iznosd, iznosp, iznval,
+      novtj, indk, indoz, anak, mjtk, pokaz, oper, vrijeme)
+    SELECT
+      li_pod, li_god, li_org, li_dok, li_broj, i,
+      --p_datum,TRIM(TO_CHAR(l_arrkonta(i),'000000')),
+      TO_DATE(l_arrdatk(i), 'dd.mm.yyyy'),
+      --trunc(sysdate),
+      TRIM(TO_CHAR(l_arrkonta(i),'000000')),  -- 05.11.2015
+      (CASE WHEN r_konto.po_partneru=1 OR r_konto.po_radniku=1 OR r_konto.dodatna_analitika=1  THEN l_arranak(i) ELSE 0 END),  -- pročišćavanje po analitici
+      (CASE WHEN r_konto.po_orgjedinici=1 OR r_konto.dodatna_analitika=2 THEN l_arrmjtk(i) ELSE 0 END),                       -- pročišćavanje po analitici
+      TO_DATE(l_arrdatdok(i), 'dd.mm.yyyy'),
+      TO_DATE(l_arrdatdosp(i), 'dd.mm.yyyy'),
+      SUBSTR (l_arropis(i), 1, 99),   --neno postavio duljinu opisa 20->99
+      l_arrval(i),
+      l_arriznosd(i),l_arriznosp(i),l_arriznval(i),
+      CASE WHEN l_arriznosd(i)<>0 THEN r_konto.nov_tijek_dug ELSE r_konto.nov_tijek_pot END,
+    --  'N', 'O', 0, 0, 0, SUBSTR(p_tko, 1, 8), SYSDATE
+      'N', 'O', 0, 0, 0, SUBSTR(p_tko, 1, 20), SYSDATE
+    FROM dual;
+  
+  li_broj_tmp:=l_arrbr(i);
+
+  END LOOP;
+  
+  
+  FOR i IN l_arrbrtem.FIRST..l_arrbrtem.LAST LOOP
+    li_pod:=TO_NUMBER(SUBSTR(l_arrbrtem(i),1,2));
+    li_god:=TO_NUMBER(SUBSTR(l_arrbrtem(i),3,4));
+    li_org:=TO_NUMBER(SUBSTR(l_arrbrtem(i),7,4));
+    li_dok:=TO_NUMBER(SUBSTR(l_arrbrtem(i),11,3));
+    li_broj:=TO_NUMBER(SUBSTR(l_arrbrtem(i),14,5));
+    ls_opis:=SUBSTR(l_arrbrtem(i),19,30);
+    INSERT INTO itifin.fgtem (
+      pod, god, org, dok, br, datk, op, uiznosd, uiznosp, indk, ind1, oper, vrijeme)
+    SELECT
+      pod, god, org, dok, br, datk, SUBSTR(ls_opis, 1, 30), SUM(iznosd), SUM(iznosp), 'N', 'R', p_tko, SYSDATE
+    FROM
+      itifin.fs
+    WHERE
+      pod=li_pod AND god=li_god AND org=li_org AND dok=li_dok AND br=li_broj
+    GROUP BY
+      pod, god, org, dok, br, datk;
+      
+    SELECT
+      SUM(uiznosd), SUM(uiznosp)
+    INTO
+     lf_iznosd, lf_iznosp  
+    FROM
+      itifin.fgtem
+    WHERE
+      pod=li_pod AND god=li_god AND org=li_org AND dok=li_dok AND br=li_broj;
+
+    v_tem := v_tem || li_pod || '/'|| li_god || '/'|| li_org || '/' || li_dok || '/' || li_broj || ' ( Duguje:' || lf_iznosd || ' Potražuje:' || lf_iznosp || ' )'|| CHR(13);
+
+      
+  END LOOP;
+
+ p_info:= v_tem;
+ RETURN 0;  
+
+ 
+EXCEPTION
+  WHEN FINZATVARANJE_PERIOD.E_ZATVORENA_GODINA THEN
+    p_info := ' ';
+    RETURN 1;
+
+  WHEN E_KONTO THEN
+    p_info := li_stavka_greska || '|' || ls_konto_greska;
+    RETURN 2;
+
+  WHEN E_IMPORTIRANO THEN
+    p_info := v_tem;
+    RETURN 3;
+
+  WHEN OTHERS THEN
+    p_info := SQLERRM(SQLCODE);
+    RETURN -1;
+
+END Univerzalni_Import_Temeljnica;
