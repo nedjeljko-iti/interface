@@ -1,0 +1,43 @@
+{
+  "name": "interface",
+  "version": "1.0.0",
+  "description": "Import financijskih podataka u Oracle bazu",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron . --inspect\"",
+    "build": "next build",
+    "start": "next start",
+    "electron": "electron .",
+    "dist": "next build && node scripts/prepare-dist.js && electron-builder --win"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.3",
+    "next": "^15.2.1",
+    "oracledb": "^6.5.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.iti.interface",
+    "productName": "ITI Interface",
+    "asar": false,
+    "win": {
+      "target": "dir"
+    },
+    "files": [
+      "electron/**/*",
+      ".next/standalone/**/*",
+      "node_modules/oracledb/**/*"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

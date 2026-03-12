@@ -1,0 +1,20 @@
+{
+  "extends": null,
+  "appId": "com.iti.interface",
+  "productName": "ITI Interface",
+  "asar": false,
+  "directories": {
+    "output": "../frontend-portable"
+  },
+  "win": {
+    "target": "nsis"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  },
+  "files": [
+    "electron/**/*",
+    "dist/**/*"
+  ]
+}

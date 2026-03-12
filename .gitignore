@@ -4,6 +4,8 @@ instantclient/
 # Osjetljivi podaci
 server.txt
 *.csv
+.env.local
+.env*.local
 
 # Stari Delphi kod (samo referenca, ne ide u novi repo)
 stari_interface/
@@ -15,3 +17,14 @@ check_numbers.js
 
 # Claude Code lokalne postavke
 .claude/
+
+# Next.js
+.next/
+out/
+
+# Node.js
+node_modules/
+
+# Electron build output
+dist/
+release/

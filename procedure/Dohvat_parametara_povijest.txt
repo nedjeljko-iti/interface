@@ -1,0 +1,26 @@
+/* Dohvat povijesti za jedan parametar */
+PROCEDURE Dohvat_parametara_povijest (
+            p_param       IN      PARAMS_OPIS.PARAM%TYPE,
+            p_cursor      OUT     SYS_REFCURSOR) IS
+BEGIN
+
+  OPEN p_cursor FOR
+    SELECT
+      PV.pv_id,
+      PV.pod, DECODE(TRIM(P.naz), NULL, '(sva poduzeća)', PV.pod || ' - ' || TRIM(P.naz)) pod_naziv,
+      PV.org, DECODE(TRIM(O.naz), NULL, '', (PV.org || ' - ' || TRIM(O.naz))) org_naziv,
+      PV.datumod,
+      PV.vrijednost, PVO.opis,
+      F.imeprezime operater, PV.vrijeme
+    FROM
+      itifin.params_vrijednost PV
+      JOIN itifin.params_vrijednost_opis PVO ON (PV.param=PVO.param AND PV.vrijednost=PVO.vrijednost)
+      JOIN itifin.finuser_view F ON (PV.operater=F.korisnik)
+      LEFT OUTER JOIN itifis.pod P ON (PV.pod = P.pod)
+      LEFT OUTER JOIN itifis.org O ON (PV.pod = O.pod AND PV.org=O.org)
+    WHERE
+      PV.param = p_param
+    ORDER BY
+      PV.pod DESC NULLS LAST, PV.datumod DESC;
+
+END;
